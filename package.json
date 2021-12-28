@@ -1,9 +1,10 @@
 {
   "name": "@nodestrap/dimensions",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "A set of React helper for dimensions.",
   "type": "module",
   "main": "dist/dimensions.js",
+  "types": "dist/dimensions.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
