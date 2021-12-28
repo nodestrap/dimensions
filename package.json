@@ -1,0 +1,33 @@
+{
+  "name": "@nodestrap/dimensions",
+  "version": "4.0.0",
+  "description": "A set of React helper for dimensions.",
+  "type": "module",
+  "main": "dist/dimensions.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodestrap/dimensions.git"
+  },
+  "keywords": [
+    "react",
+    "hooks",
+    "helpers",
+    "dimensions"
+  ],
+  "author": "heymarco",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nodestrap/dimensions/issues"
+  },
+  "homepage": "https://github.com/nodestrap/dimensions#readme",
+  "dependencies": {
+    "@cssfn/css-types": "^1.0.2",
+    "@cssfn/cssfn": "^1.0.7",
+    "@nodestrap/hooks": "^4.0.0",
+    "@types/react": "^17.0.38",
+    "react": "^17.0.2"
+  }
+}
