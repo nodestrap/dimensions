@@ -81,7 +81,9 @@ const useCssSize = (size: Readonly<Nullable<Size>>, options: CssSizeOptions) => 
                     }),
                 ]),
             ]),
-        ]);
+        ])
+        .attach()
+        ;
         
         
         

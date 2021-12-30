@@ -39,7 +39,8 @@ const useCssSize = (size, options) => {
                     }),
                 ]),
             ]),
-        ]);
+        ])
+            .attach();
         // cleanups:
         return () => {
             sheet.current?.detach();

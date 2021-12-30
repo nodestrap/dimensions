@@ -1,6 +1,6 @@
 {
   "name": "@nodestrap/dimensions",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "A set of React helper for dimensions.",
   "type": "module",
   "main": "dist/dimensions.js",
