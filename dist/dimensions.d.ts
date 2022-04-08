@@ -11,22 +11,18 @@ export declare type Size = {
 export declare type Nullable<T> = {
     [key in keyof T]: T[key] | null;
 };
-export declare type Mutable<T> = {
-    -readonly [key in keyof T]: T[key];
-};
-export declare type OnElementResizeCallback = (elm: HTMLElement) => void;
-export declare const useElementOnResize: (callback: OnElementResizeCallback, options?: SizeOptions) => React.RefObject<HTMLElement>;
-export declare const useElementSize: (options?: SizeOptions) => readonly [Nullable<Size>, React.RefObject<HTMLElement>];
+export declare type ElementResizeCallback<TElement extends HTMLElement = HTMLElement> = (elm: TElement) => void;
+export declare const useElementOnResize: <TElement extends HTMLElement = HTMLElement>(resizingElementRef: React.RefObject<TElement>, elementResizeCallback: ElementResizeCallback<TElement>, options?: SizeOptions) => void;
+export declare type ElementSizeCallback<TElement extends HTMLElement = HTMLElement> = (size: Size, elm: TElement) => void;
+export declare const useElementSize: <TElement extends HTMLElement = HTMLElement>(resizingElementRef: React.RefObject<TElement>, elementSizeCallback: ElementSizeCallback, options?: SizeOptions) => void;
 export interface CssSizeOptions extends Partial<SizeOptions> {
     varWidth?: Cust.Decl;
     varHeight?: Cust.Decl;
 }
-export declare const useElementCssSize: (options: CssSizeOptions) => React.RefObject<HTMLElement>;
-export declare type OnWindowResizeCallback = (window: Window) => void;
-export declare const useWindowOnResize: (callback: OnWindowResizeCallback) => void;
-export declare const useWindowSize: (options?: SizeOptions) => Nullable<Size>;
+export declare const useElementCssSize: <TElement extends HTMLElement = HTMLElement>(resizingElementRef: React.RefObject<TElement>, options: CssSizeOptions) => void;
+export declare type WindowResizeCallback = (window: Window) => void;
+export declare const useWindowOnResize: (windowResizeCallback: WindowResizeCallback) => void;
+export declare type WindowSizeCallback = (size: Size, window: Window) => void;
+export declare const useWindowSize: (windowSizeCallback: WindowSizeCallback, options?: SizeOptions) => void;
 export declare const useWindowCssSize: (options: CssSizeOptions) => void;
-export interface UseWindowCssSizeProps {
-    options: CssSizeOptions;
-}
-export declare function UseWindowCssSize(props: UseWindowCssSizeProps): JSX.Element;
+export declare function UseWindowCssSize(props: CssSizeOptions): JSX.Element;

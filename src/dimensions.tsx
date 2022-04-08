@@ -2,7 +2,7 @@
 import {
     default as React,
     useRef,
-    useReducer as _useReducer,
+    useCallback,
 }                           from 'react'         // base technology of our nodestrap components
 
 // cssfn:
@@ -10,10 +10,6 @@ import type {
     Cust,
 }                           from '@cssfn/css-types'   // ts defs support for cssfn
 import {
-    // general types:
-    StyleSheet,
-    
-    
     // styles:
     createSheet,
     
@@ -29,7 +25,7 @@ import {
 
 // nodestrap utilities:
 import {
-    useIsomorphicLayoutEffect,
+    useIsomorphicLayoutEffect, // TODO: replace with useInsertionEffect
 }                           from '@nodestrap/hooks'
 
 
@@ -45,81 +41,71 @@ const defaultWindowSizeOptions  : SizeOptions = { box: 'content-box' };
 
 export type Size        = { width: number, height: number }
 export type Nullable<T> = { [key in keyof T] : T[key] | null }
-export type Mutable<T>  = { -readonly [key in keyof T] : T[key] }
 
 
 
-// internal hooks:
-const reducerHandler = (size: Nullable<Size>, newSize: Size): Nullable<Size> => {
-    if ((newSize.width === size.width) && (newSize.height === size.height)) return size; // no diff => no changes needed
-    
-    return newSize;
-};
-const useSizeState = (initial?: () => Size|null) => !initial ? _useReducer(reducerHandler, { width: null, height: null }) : _useReducer(reducerHandler, { width: null, height: null }, () => initial() ?? { width: null, height: null });
-
-const useCssSize = (size: Readonly<Nullable<Size>>, options: CssSizeOptions) => {
+// utilities:
+const createCssSize = (size: Readonly<Nullable<Size>>, options: CssSizeOptions) => {
+    const { width   , height    } = size;
     const { varWidth, varHeight } = options;
-    const sheet = useRef<StyleSheet | null>(null);
     
-    useIsomorphicLayoutEffect(() => {
-        const { width, height } = size;
-        const hasWidth  = ((width  !== null) && varWidth );
-        const hasHeight = ((height !== null) && varHeight)
-        if (!hasWidth && !hasHeight) return;
-        
-        
-        
-        // setups:
-        sheet.current = createSheet(() => [
-            globalDef([
-                atRoot([
-                    hasWidth  && vars({
-                        [varWidth  as string] : `${width}px`,
-                    }),
-                    hasHeight && vars({
-                        [varHeight as string] : `${height}px`,
-                    }),
-                ]),
+    
+    
+    // conditions:
+    const hasWidth  = ((width  !== null) && !!varWidth );
+    const hasHeight = ((height !== null) && !!varHeight);
+    if (!hasWidth && !hasHeight) return; // nothing to update
+    
+    
+    
+    // setups:
+    const sheet = createSheet(() => [
+        globalDef([
+            atRoot([
+                hasWidth  && vars({
+                    [varWidth  as string] : `${width}px`,
+                }),
+                hasHeight && vars({
+                    [varHeight as string] : `${height}px`,
+                }),
             ]),
-        ])
-        .attach()
-        ;
-        
-        
-        
-        // cleanups:
-        return () => {
-            sheet.current?.detach();
-        };
-    }, [size, varWidth, varHeight]);
+        ]),
+    ])
+    .attach()
+    ;
+    
+    
+    
+    // cleanups:
+    return () => {
+        sheet.detach();
+    };
 };
 
 
 
 // hooks:
 
-export type OnElementResizeCallback = (elm: HTMLElement) => void
-export const useElementOnResize = (callback: OnElementResizeCallback, options = defaultElementSizeOptions) => {
-    const elmRef = useRef<HTMLElement>(null);
-    
-    
-    
+export type ElementResizeCallback<TElement extends HTMLElement = HTMLElement> = (elm: TElement) => void
+export const useElementOnResize = <TElement extends HTMLElement = HTMLElement>(resizingElementRef: React.RefObject<TElement>, elementResizeCallback: ElementResizeCallback<TElement>, options = defaultElementSizeOptions) => {
+    // dom effects:
     useIsomorphicLayoutEffect(() => {
-        const elm = elmRef.current;
-        if (!elm) return;
+        // conditions:
+        const resizingElement = resizingElementRef.current;
+        if (!resizingElement) return;
         
         
         
         // handlers:
         const handleResize = () => {
-            callback(elm);
-        }
+            elementResizeCallback(resizingElement);
+        };
         
         
         
         // setups:
         const observer = new ResizeObserver(handleResize);
-        observer.observe(elm, options);
+        observer.observe(resizingElement, options);
         
         
         
@@ -127,63 +113,63 @@ export const useElementOnResize = (callback: OnElementResizeCallback, options = 
         return () => {
             observer.disconnect();
         };
-    }, []);
-    
-    
-    
-    return elmRef;
+    }, [resizingElementRef, elementResizeCallback]);
 };
 
-export const useElementSize = (options = defaultElementSizeOptions) => {
+export type ElementSizeCallback<TElement extends HTMLElement = HTMLElement> = (size: Size, elm: TElement) => void
+export const useElementSize = <TElement extends HTMLElement = HTMLElement>(resizingElementRef: React.RefObject<TElement>, elementSizeCallback: ElementSizeCallback, options = defaultElementSizeOptions) => {
     const isBorderBox = (options.box === 'border-box');
-    
-    const [size, setSize] = useSizeState();
-    
-    
-    
-    const elmRef = useElementOnResize((elm) => {
-        setSize({
+    const elementResizeCallback : ElementResizeCallback = useCallback((elm) => {
+        elementSizeCallback({
             width  : (isBorderBox ? elm.offsetWidth  : elm.clientWidth ),
             height : (isBorderBox ? elm.offsetHeight : elm.clientHeight),
-        });
-    }, options);
-    
-    
-    
-    return [size, elmRef] as const;
+        }, elm);
+    }, [isBorderBox, elementSizeCallback]);
+    useElementOnResize<TElement>(resizingElementRef, elementResizeCallback, options);
 };
 
 export interface CssSizeOptions extends Partial<SizeOptions> {
     varWidth  ?: Cust.Decl
     varHeight ?: Cust.Decl
 }
-export const useElementCssSize = (options: CssSizeOptions) => {
-    const [size, setElmRef] = useElementSize({...defaultElementSizeOptions, ...options});
-    useCssSize(size, options);
+export const useElementCssSize = <TElement extends HTMLElement = HTMLElement>(resizingElementRef: React.RefObject<TElement>, options: CssSizeOptions) => {
+    const prevCssSize = useRef<(() => void)|undefined>(undefined);
+    const elementSizeCallback : ElementSizeCallback = useCallback((size) => {
+        prevCssSize.current?.(); // cleanup prev
+        prevCssSize.current = createCssSize(size, options);
+    }, [prevCssSize, options]);
+    useElementSize(resizingElementRef, elementSizeCallback, {...defaultElementSizeOptions, ...options});
     
-    
-    
-    return setElmRef;
+    useIsomorphicLayoutEffect(() => {
+        // cleanups:
+        return () => {
+            prevCssSize.current?.(); // cleanup prev
+            prevCssSize.current = undefined;
+        };
+    }, []); // runs once
 };
 
 
 
-export type OnWindowResizeCallback = (window: Window) => void
-export const useWindowOnResize = (callback: OnWindowResizeCallback) => {
+export type WindowResizeCallback = (window: Window) => void
+export const useWindowOnResize = (windowResizeCallback: WindowResizeCallback) => {
+    // dom effects:
     useIsomorphicLayoutEffect(() => {
+        // conditions:
         if (typeof(window) === 'undefined') return;
         
         
         
         // handlers:
         const handleResize = () => {
-            callback(window);
+            windowResizeCallback(window);
         };
         
         
         
         // setups:
         window.addEventListener('resize', handleResize);
+        handleResize(); // the first trigger
         
         
         
@@ -191,48 +177,43 @@ export const useWindowOnResize = (callback: OnWindowResizeCallback) => {
         return () => {
             window.removeEventListener('resize', handleResize);
         };
-    }, []);
+    }, [windowResizeCallback]);
 };
 
-export const useWindowSize = (options = defaultWindowSizeOptions) => {
+export type WindowSizeCallback = (size: Size, window: Window) => void
+export const useWindowSize = (windowSizeCallback : WindowSizeCallback, options = defaultWindowSizeOptions) => {
     const isBorderBox = (options.box === 'border-box');
-    
-    const [size, setSize] = useSizeState((): Size|null => {
-        if (typeof(window) === 'undefined') return null;
-        
-        return {
+    const windowResizeCallback : WindowResizeCallback = useCallback((window) => {
+        windowSizeCallback({
             width  : (isBorderBox ? window.outerWidth  : window.innerWidth ),
             height : (isBorderBox ? window.outerHeight : window.innerHeight),
-        };
-    });
-    
-    
-    
-    useWindowOnResize((window) => {
-        setSize({
-            width  : (isBorderBox ? window.outerWidth  : window.innerWidth ),
-            height : (isBorderBox ? window.outerHeight : window.innerHeight),
-        });
-    });
-    
-    
-    
-    return size;
+        }, window);
+    }, [isBorderBox, windowSizeCallback]);
+    useWindowOnResize(windowResizeCallback);
 };
 
 export const useWindowCssSize = (options: CssSizeOptions) => {
-    const size = useWindowSize({...defaultWindowSizeOptions, ...options});
-    useCssSize(size, options);
+    const prevCssSize = useRef<(() => void)|undefined>(undefined);
+    const windowSizeCallback : WindowSizeCallback = useCallback((size) => {
+        prevCssSize.current?.(); // cleanup prev
+        prevCssSize.current = createCssSize(size, options);
+    }, [prevCssSize, options]);
+    useWindowSize(windowSizeCallback, {...defaultWindowSizeOptions, ...options});
+    
+    useIsomorphicLayoutEffect(() => {
+        // cleanups:
+        return () => {
+            prevCssSize.current?.(); // cleanup prev
+            prevCssSize.current = undefined;
+        };
+    }, []); // runs once
 };
 
 
 
-export interface UseWindowCssSizeProps {
-    options: CssSizeOptions
-}
-export function UseWindowCssSize(props: UseWindowCssSizeProps) {
+export function UseWindowCssSize(props: CssSizeOptions) {
     // hooks:
-    useWindowCssSize(props.options);
+    useWindowCssSize(props);
     
     
     

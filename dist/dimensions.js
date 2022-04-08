@@ -1,5 +1,5 @@
 // react:
-import { default as React, useRef, useReducer as _useReducer, } from 'react'; // base technology of our nodestrap components
+import { default as React, useRef, useCallback, } from 'react'; // base technology of our nodestrap components
 import { 
 // styles:
 createSheet, 
@@ -8,122 +8,130 @@ globalDef, vars,
 // rules:
 atRoot, } from '@cssfn/cssfn'; // cssfn core
 // nodestrap utilities:
-import { useIsomorphicLayoutEffect, } from '@nodestrap/hooks';
+import { useIsomorphicLayoutEffect, // TODO: replace with useInsertionEffect
+ } from '@nodestrap/hooks';
 const defaultElementSizeOptions = { box: 'border-box' };
 const defaultWindowSizeOptions = { box: 'content-box' };
-// internal hooks:
-const reducerHandler = (size, newSize) => {
-    if ((newSize.width === size.width) && (newSize.height === size.height))
-        return size; // no diff => no changes needed
-    return newSize;
-};
-const useSizeState = (initial) => !initial ? _useReducer(reducerHandler, { width: null, height: null }) : _useReducer(reducerHandler, { width: null, height: null }, () => initial() ?? { width: null, height: null });
-const useCssSize = (size, options) => {
+// utilities:
+const createCssSize = (size, options) => {
+    const { width, height } = size;
     const { varWidth, varHeight } = options;
-    const sheet = useRef(null);
-    useIsomorphicLayoutEffect(() => {
-        const { width, height } = size;
-        const hasWidth = ((width !== null) && varWidth);
-        const hasHeight = ((height !== null) && varHeight);
-        if (!hasWidth && !hasHeight)
-            return;
-        // setups:
-        sheet.current = createSheet(() => [
-            globalDef([
-                atRoot([
-                    hasWidth && vars({
-                        [varWidth]: `${width}px`,
-                    }),
-                    hasHeight && vars({
-                        [varHeight]: `${height}px`,
-                    }),
-                ]),
+    // conditions:
+    const hasWidth = ((width !== null) && !!varWidth);
+    const hasHeight = ((height !== null) && !!varHeight);
+    if (!hasWidth && !hasHeight)
+        return; // nothing to update
+    // setups:
+    const sheet = createSheet(() => [
+        globalDef([
+            atRoot([
+                hasWidth && vars({
+                    [varWidth]: `${width}px`,
+                }),
+                hasHeight && vars({
+                    [varHeight]: `${height}px`,
+                }),
             ]),
-        ])
-            .attach();
-        // cleanups:
-        return () => {
-            sheet.current?.detach();
-        };
-    }, [size, varWidth, varHeight]);
+        ]),
+    ])
+        .attach();
+    // cleanups:
+    return () => {
+        sheet.detach();
+    };
 };
-export const useElementOnResize = (callback, options = defaultElementSizeOptions) => {
-    const elmRef = useRef(null);
+export const useElementOnResize = (resizingElementRef, elementResizeCallback, options = defaultElementSizeOptions) => {
+    // dom effects:
     useIsomorphicLayoutEffect(() => {
-        const elm = elmRef.current;
-        if (!elm)
+        // conditions:
+        const resizingElement = resizingElementRef.current;
+        if (!resizingElement)
             return;
         // handlers:
         const handleResize = () => {
-            callback(elm);
+            elementResizeCallback(resizingElement);
         };
         // setups:
         const observer = new ResizeObserver(handleResize);
-        observer.observe(elm, options);
+        observer.observe(resizingElement, options);
         // cleanups:
         return () => {
             observer.disconnect();
         };
-    }, []);
-    return elmRef;
+    }, [resizingElementRef, elementResizeCallback]);
 };
-export const useElementSize = (options = defaultElementSizeOptions) => {
+export const useElementSize = (resizingElementRef, elementSizeCallback, options = defaultElementSizeOptions) => {
     const isBorderBox = (options.box === 'border-box');
-    const [size, setSize] = useSizeState();
-    const elmRef = useElementOnResize((elm) => {
-        setSize({
+    const elementResizeCallback = useCallback((elm) => {
+        elementSizeCallback({
             width: (isBorderBox ? elm.offsetWidth : elm.clientWidth),
             height: (isBorderBox ? elm.offsetHeight : elm.clientHeight),
-        });
-    }, options);
-    return [size, elmRef];
+        }, elm);
+    }, [isBorderBox, elementSizeCallback]);
+    useElementOnResize(resizingElementRef, elementResizeCallback, options);
 };
-export const useElementCssSize = (options) => {
-    const [size, setElmRef] = useElementSize({ ...defaultElementSizeOptions, ...options });
-    useCssSize(size, options);
-    return setElmRef;
-};
-export const useWindowOnResize = (callback) => {
+export const useElementCssSize = (resizingElementRef, options) => {
+    const prevCssSize = useRef(undefined);
+    const elementSizeCallback = useCallback((size) => {
+        prevCssSize.current?.(); // cleanup prev
+        prevCssSize.current = createCssSize(size, options);
+    }, [prevCssSize, options]);
+    useElementSize(resizingElementRef, elementSizeCallback, { ...defaultElementSizeOptions, ...options });
     useIsomorphicLayoutEffect(() => {
+        // cleanups:
+        return () => {
+            prevCssSize.current?.(); // cleanup prev
+            prevCssSize.current = undefined;
+        };
+    }, []); // runs once
+};
+export const useWindowOnResize = (windowResizeCallback) => {
+    // dom effects:
+    useIsomorphicLayoutEffect(() => {
+        // conditions:
         if (typeof (window) === 'undefined')
             return;
         // handlers:
         const handleResize = () => {
-            callback(window);
+            windowResizeCallback(window);
         };
         // setups:
         window.addEventListener('resize', handleResize);
+        handleResize(); // the first trigger
         // cleanups:
         return () => {
             window.removeEventListener('resize', handleResize);
         };
-    }, []);
+    }, [windowResizeCallback]);
 };
-export const useWindowSize = (options = defaultWindowSizeOptions) => {
+export const useWindowSize = (windowSizeCallback, options = defaultWindowSizeOptions) => {
     const isBorderBox = (options.box === 'border-box');
-    const [size, setSize] = useSizeState(() => {
-        if (typeof (window) === 'undefined')
-            return null;
-        return {
+    const windowResizeCallback = useCallback((window) => {
+        windowSizeCallback({
             width: (isBorderBox ? window.outerWidth : window.innerWidth),
             height: (isBorderBox ? window.outerHeight : window.innerHeight),
-        };
-    });
-    useWindowOnResize((window) => {
-        setSize({
-            width: (isBorderBox ? window.outerWidth : window.innerWidth),
-            height: (isBorderBox ? window.outerHeight : window.innerHeight),
-        });
-    });
-    return size;
+        }, window);
+    }, [isBorderBox, windowSizeCallback]);
+    useWindowOnResize(windowResizeCallback);
 };
 export const useWindowCssSize = (options) => {
-    const size = useWindowSize({ ...defaultWindowSizeOptions, ...options });
-    useCssSize(size, options);
+    const prevCssSize = useRef(undefined);
+    const windowSizeCallback = useCallback((size) => {
+        prevCssSize.current?.(); // cleanup prev
+        prevCssSize.current = createCssSize(size, options);
+    }, [prevCssSize, options]);
+    useWindowSize(windowSizeCallback, { ...defaultWindowSizeOptions, ...options });
+    useIsomorphicLayoutEffect(() => {
+        // cleanups:
+        return () => {
+            prevCssSize.current?.(); // cleanup prev
+            prevCssSize.current = undefined;
+        };
+    }, []); // runs once
 };
 export function UseWindowCssSize(props) {
     // hooks:
-    useWindowCssSize(props.options);
+    useWindowCssSize(props);
     // jsx:
     return React.createElement(React.Fragment, null);
 }
